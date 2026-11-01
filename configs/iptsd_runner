@@ -1,0 +1,40 @@
+#!/system/bin/sh
+
+PATH=/system/bin:/system/xbin:/system/vendor/bin:/vendor/bin
+
+cleanup_raw_ithc() {
+    for namefile in /sys/class/input/event*/device/name; do
+        if [ -f "$namefile" ]; then
+            case "$(cat "$namefile" 2>/dev/null)" in
+                *"Intel Touch Host Controller"*)
+                    evnode="/dev/input/$(basename $(dirname $(dirname "$namefile")))"
+                    if [ -e "$evnode" ]; then
+                        rm -f "$evnode" 2>/dev/null
+                    fi
+                    ;;
+            esac
+        fi
+    done
+}
+
+# Initial cleanup before starting IPTSD
+cleanup_raw_ithc
+
+# Run background watchdog to clean up raw ithc if kernel re-enumerates on wake/sleep
+(
+    while true; do
+        cleanup_raw_ithc
+        sleep 2
+    done
+) &
+
+if [ ! -f /data/vendor/iptsd.conf ] && [ -f /vendor/etc/iptsd.conf ]; then
+    cp /vendor/etc/iptsd.conf /data/vendor/iptsd.conf 2>/dev/null
+    chmod 644 /data/vendor/iptsd.conf 2>/dev/null
+fi
+
+for dev in /dev/hidraw*; do
+    if [ -e "$dev" ] && /vendor/bin/iptsd-check-device "$dev" >/dev/null 2>&1; then
+        exec /vendor/bin/iptsd "$dev"
+    fi
+done
