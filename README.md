@@ -1,6 +1,21 @@
 # Surface Pro 7+ Touch & Multitouch Fix for Bliss OS / Android-x86
 
-Tested and verified on **Microsoft Surface Pro 7+** (Intel Tiger Lake 11th Gen, hardware ID `045e:0c1a`) running **Bliss OS 16.9** (Android 13, kernel `6.1.112-gloria-surface-xanmod1`).
+Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** (Surface Edition).
+
+---
+
+## Target Machine & System Profile
+
+| Specification | Value |
+| :--- | :--- |
+| **Device Model** | **Microsoft Surface Pro 7+** (Model 1960 / 1961) |
+| **Manufacturer** | Microsoft Corporation |
+| **Processor** | 11th Gen Intel(R) Core(TM) i3-1115G4 @ 3.00GHz (Tiger Lake, Iris Xe Graphics) |
+| **Touch Controller** | Intel Touch Host Controller (`ithc` / `iptsd`, USB/HID ID: `045E:0C1A`) |
+| **OS Distribution** | **Bliss OS 16.9.7** (Surface Edition, Codename: *Typhoon*) |
+| **Bliss Build ID** | `Bliss-Surface-v16.9.7-x86_64-OFFICIAL-gapps-20241012` |
+| **Android Version** | **Android 13** (API level 33, Build: `TQ3A.230901.001.C1`) |
+| **Linux Kernel** | `6.1.112-gloria-surface-xanmod1` (Linux-Surface kernel with XanMod) |
 
 ---
 
