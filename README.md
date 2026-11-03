@@ -24,7 +24,7 @@ Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** 
 1. **Dual Device Conflict (Touchscreen treated as single-touch mouse/pointer)**:
    - Linux kernel module `ithc` exposes raw single-touch legacy pointer nodes (`/dev/input/event*`), while userspace daemon `iptsd` creates `/dev/input/event*` (*IPTSD Virtual Touchscreen*).
    - Android's `EventHub` opened both simultaneously, causing single-touch pointer lockups.
-   - **Fix**: Custom `iptsd_runner` actively removes raw ITHC event nodes and runs a background watchdog so `EventHub` only ever binds to the multi-touch virtual digitizer.
+   - **Fix**: Custom `iptsd_runner` actively removes raw ITHC event nodes and runs an event-driven (`inotifyd`) watchdog so `EventHub` only ever binds to the multi-touch virtual digitizer. Re-created nodes (e.g. after sleep/wake) are removed in ~5 ms.
 
 2. **180° Flipped Orientation**:
    - Surface Pro digitizers have physically inverted hardware coordinates.
@@ -42,19 +42,47 @@ Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** 
    - Setting deactivation thresholds too low allows electrical background noise into the contact cluster, causing cursor wobble.
    - **Fix**: Balanced `ActivationThreshold = 24`, `DeactivationThreshold = 20`, and `Neutral = mode` for accurate capacitive baseline subtraction.
 
+5. **Touch Watchdog CPU Drain & Touch Latency Under Load**:
+   - The original watchdog rescanned all input nodes every 2 s, forking ~90 processes per pass (~7% of a CPU core around the clock, 115x more CPU than `iptsd` itself).
+   - `iptsd` ran at normal priority, competing with game threads.
+   - **Fix**: Event-driven watchdog (`inotifyd`, ~60x less CPU: 0.07 s/min) and `iptsd` started at nice `-8`, the same "urgent display" priority as Android's `InputReader`.
+
+6. **System Stalls / `df` Hangs / ADB Drops (cpuinfo Mount Explosion)**:
+   - Root `app_process` tools (`svc`, `monkey`, `uiautomator`) make the ARM native bridge bind-mount `cpuinfo.arm64.txt` over `/proc/cpuinfo`. Shared mount propagation doubled the mounts on every call (seen: 65,621 mounts). `connect.sh` triggered it via `svc power stayon true`.
+   - **Fix**: `cpuinfo_mount_fix.rc` makes `/proc` and the cpuinfo source files private mounts at boot; `connect.sh` now uses `settings` instead of `svc`. Mount count stays at 2 after repeated tool calls.
+
+> Full before/after values for every change: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+
 ---
 
 ## Repository Contents
 
 ```
 ├── README.md
+├── CLAUDE.md                   # Workspace guide & system invariants (Claude Code)
 ├── install.sh                  # One-step automated ADB installer
-└── configs/
-    ├── iptsd.conf              # Tuned IPTSD configuration
-    ├── iptsd_runner            # Watchdog & raw ITHC cleanup launcher
-    └── idc/
-        ├── IPTSD_Virtual_Touchscreen_045E_0C1A.idc
-        └── Vendor_045e_Product_0c1a.idc
+├── configs/
+│   ├── iptsd.conf              # Tuned IPTSD configuration
+│   ├── iptsd_runner            # Raw ITHC cleanup, event-driven watchdog, iptsd launcher (nice -8)
+│   ├── init/
+│   │   └── cpuinfo_mount_fix.rc  # Boot fix for the cpuinfo mount explosion
+│   └── idc/
+│       ├── IPTSD_Virtual_Touchscreen_045E_0C1A.idc
+│       └── Vendor_045e_Product_0c1a.idc
+├── scripts/
+│   ├── connect.sh              # Reconnect Wi-Fi/USB ADB, adb root, keep screen on
+│   ├── status.sh               # IPTSD / EventHub / battery diagnostics
+│   ├── restart_iptsd.sh        # Restart touch daemon safely
+│   ├── screencap.sh            # Pull a screenshot to the host
+│   ├── pull_backup.sh          # Back up device configs to backups/
+│   └── cpu_profile.sh          # CPU profile: gaming | balance | battery
+└── docs/
+    ├── ARCHITECTURE.md         # Input pipeline & watchdog internals
+    ├── CHANGELOG.md            # Every change, with old and new values
+    ├── COMMANDS.md             # Command cheatsheet
+    ├── HARDWARE_SPECS.md       # DMI / PCI / ACPI details
+    ├── TROUBLESHOOTING.md      # Known problems & fixes
+    └── CAMERA.md               # Camera (IPU6) status: unsupported
 ```
 
 ---
@@ -74,6 +102,19 @@ chmod +x install.sh
 ./install.sh <TABLET_IP:5555 or SERIAL>
 ```
 *(If only one device is connected to ADB, you can simply run `./install.sh`)*.
+
+`install.sh` remounts the (read-only) root filesystem as read-write, deploys the touch configs, runner and IDC files, installs `cpuinfo_mount_fix.rc` (active from the next reboot), restarts `iptsd` and syncs.
+
+### Helper Scripts
+```bash
+./scripts/connect.sh                       # Reconnect and get adb root
+./scripts/status.sh                        # Touch / battery diagnostics
+./scripts/cpu_profile.sh gaming            # Max performance (resets on reboot)
+./scripts/cpu_profile.sh battery           # Longer battery life
+./scripts/cpu_profile.sh balance           # Default
+```
+
+> **Do not run `svc`, `monkey` or `uiautomator` as root over adb** on a tablet without `cpuinfo_mount_fix.rc`: each call doubles the `/proc/cpuinfo` mounts. Use `settings`, `cmd` or `am start -n` instead.
 
 ---
 
@@ -129,6 +170,38 @@ touch.pressure.calibration = none
 touch.orientation.calibration = none
 touch.distance.calibration = none
 ```
+
+### 3. `configs/iptsd_runner`
+Installed to `/system/vendor/bin/iptsd_runner` (started by Bliss `init.sh` as service `iptsd_runner`):
+1. Removes raw `Intel Touch Host Controller` input nodes (event2–9) using shell builtins only.
+2. Event-driven watchdog: `inotifyd - /dev/input:nn` (create events only; this toybox ignores the first mask letter) removes re-created raw nodes in ~5 ms.
+3. 60 s safety-net rescan.
+4. `exec nice -n -8 /vendor/bin/iptsd /dev/hidrawN`.
+
+### 4. `configs/init/cpuinfo_mount_fix.rc`
+Installed to `/system/etc/init/`. Runs at `post-fs-data`, before zygote:
+```
+on post-fs-data
+    mount none /system/etc/cpuinfo.arm64.txt /system/etc/cpuinfo.arm64.txt bind
+    mount none none /system/etc/cpuinfo.arm64.txt private
+    mount none /system/etc/cpuinfo.arm.txt /system/etc/cpuinfo.arm.txt bind
+    mount none none /system/etc/cpuinfo.arm.txt private
+    mount none none /proc private
+```
+Health check: `adb shell grep -c cpuinfo /proc/1/mounts` → `2`.
+
+---
+
+## Other Tablet Tweaks (applied on the device, not by `install.sh`)
+
+| Tweak | Old | New |
+| :--- | :--- | :--- |
+| Battery % in status bar (`status_bar_show_battery_percent`) | hidden unless charging | `2` (always, next to icon) |
+| Animation scales (window / transition / animator) | `1.0` | `0.5` |
+| SmartDock (`cu.axel.smartdock`) | installed, crash-looping | removed for user 0 |
+| 64 GB microSD | portable exFAT | adopted internal storage (encrypted ext4) |
+
+Details, commands and how to revert each one: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ---
 

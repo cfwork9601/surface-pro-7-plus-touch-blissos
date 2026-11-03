@@ -42,7 +42,7 @@ Do not modify or propose changes that break these verified system invariants:
 1. **Dual Device Conflict (`ithc` vs `iptsd`)**:
    - The Linux kernel driver `ithc` exposes a raw input node (`Intel Touch Host Controller`).
    - Android `EventHub` will lock to single-touch pointer if this node exists.
-   - `/system/vendor/bin/iptsd_runner` actively removes raw ITHC nodes and runs a background watchdog. Ensure this runner is never bypassed.
+   - `/system/vendor/bin/iptsd_runner` actively removes raw ITHC nodes, runs an event-driven (`inotifyd`) watchdog, and starts `iptsd` at nice -8. Ensure this runner is never bypassed.
 2. **Coordinate Orientation**:
    - Surface digitizer coordinates are physically inverted 180°.
    - `InvertX = true` and `InvertY = true` in `/data/vendor/iptsd.conf` must remain set.
@@ -71,3 +71,4 @@ Consult these detailed references on demand:
 - **Troubleshooting & Diagnostic Trees:** See [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 - **Complete Command Cheatsheet:** See [`docs/COMMANDS.md`](docs/COMMANDS.md)
 - **Camera Status (IPU6, unsupported):** See [`docs/CAMERA.md`](docs/CAMERA.md)
+- **Change History (old → new values, how to revert):** See [`docs/CHANGELOG.md`](docs/CHANGELOG.md)

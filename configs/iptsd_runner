@@ -2,29 +2,52 @@
 
 PATH=/system/bin:/system/xbin:/system/vendor/bin:/vendor/bin
 
+# Raw ITHC input nodes must be removed, otherwise Android EventHub locks the
+# touchscreen to single-touch pointer mode. All checks below use shell
+# builtins only (no cat/basename/dirname forks).
+
+# $1 = node name, e.g. "event7". Removes /dev/input/$1 if it belongs to ITHC.
+remove_if_ithc() {
+    case "$1" in event*) ;; *) return ;; esac
+    namefile="/sys/class/input/$1/device/name"
+    [ -r "$namefile" ] || return
+    read -r devname < "$namefile"
+    case "$devname" in
+        *"Intel Touch Host Controller"*)
+            [ -e "/dev/input/$1" ] && rm -f "/dev/input/$1" 2>/dev/null
+            ;;
+    esac
+}
+
 cleanup_raw_ithc() {
-    for namefile in /sys/class/input/event*/device/name; do
-        if [ -f "$namefile" ]; then
-            case "$(cat "$namefile" 2>/dev/null)" in
-                *"Intel Touch Host Controller"*)
-                    evnode="/dev/input/$(basename $(dirname $(dirname "$namefile")))"
-                    if [ -e "$evnode" ]; then
-                        rm -f "$evnode" 2>/dev/null
-                    fi
-                    ;;
-            esac
-        fi
+    for sysnode in /sys/class/input/event*; do
+        remove_if_ithc "${sysnode##*/}"
     done
 }
 
 # Initial cleanup before starting IPTSD
 cleanup_raw_ithc
 
-# Run background watchdog to clean up raw ithc if kernel re-enumerates on wake/sleep
+# Event-driven watchdog: react the moment the kernel re-creates a node
+# (resume from sleep, ITHC re-enumeration) instead of polling every 2s.
+# NOTE: this toybox inotifyd ignores the first mask letter, so ":nn" = create only.
+# A plain ":n" fails with "Invalid argument"; the default mask would also report
+# every read of every input node (a flood on each touch frame).
 (
     while true; do
         cleanup_raw_ithc
-        sleep 2
+        inotifyd - /dev/input:nn | while read -r _event _dir node; do
+            remove_if_ithc "$node"
+        done
+        sleep 5   # inotifyd exited unexpectedly; restart it
+    done
+) &
+
+# Safety net in case an event is missed while inotifyd is (re)starting.
+(
+    while true; do
+        sleep 60
+        cleanup_raw_ithc
     done
 ) &
 
@@ -35,6 +58,8 @@ fi
 
 for dev in /dev/hidraw*; do
     if [ -e "$dev" ] && /vendor/bin/iptsd-check-device "$dev" >/dev/null 2>&1; then
-        exec /vendor/bin/iptsd "$dev"
+        # Run touch processing at Android's "urgent display" priority (nice -8,
+        # same as InputReader) so busy games can't delay touch frames.
+        exec nice -n -8 /vendor/bin/iptsd "$dev"
     fi
 done

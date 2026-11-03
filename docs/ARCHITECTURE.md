@@ -55,22 +55,12 @@ Unlike standard touchscreens that emit processed coordinates from hardware, Surf
 
 ### 1. Dual Device Clash & The Watchdog
 - **The Issue**: `ithc.ko` exposes a raw input event node identifying as `Intel Touch Host Controller`. Android's `EventHub` opens it as a single-touch mouse/pointer. If both are open, Android locks touch to a single coordinate.
-- **The Fix**: `/system/vendor/bin/iptsd_runner` executes:
-  ```sh
-  cleanup_raw_ithc() {
-      for namefile in /sys/class/input/event*/device/name; do
-          if [ -f "$namefile" ]; then
-              case "$(cat "$namefile" 2>/dev/null)" in
-                  *"Intel Touch Host Controller"*)
-                      evnode="/dev/input/$(basename $(dirname $(dirname "$namefile")))"
-                      [ -e "$evnode" ] && rm -f "$evnode" 2>/dev/null
-                      ;;
-              esac
-          fi
-      done
-  }
-  ```
-  It runs an initial cleanup and spawns a background `sleep 2` loop so kernel re-enumerations on sleep/wake never resurrect the raw node.
+- **The Fix**: `/system/vendor/bin/iptsd_runner` (source: `configs/iptsd_runner`):
+  1. Runs an initial cleanup: for every `/sys/class/input/eventN`, reads `device/name` with the shell builtin `read` and deletes `/dev/input/eventN` if it contains `Intel Touch Host Controller`. ITHC exposes 8 such nodes (event2–9, including `... Stylus`).
+  2. **Event-driven watchdog**: `inotifyd - /dev/input:nn` reports each node the kernel re-creates (resume from sleep, re-enumeration), and only that node is checked. Measured removal time: ~5 ms. The previous 2 s polling loop forked ~90 processes per pass and used ~7% of a core at all times.
+     - Toybox quirk: this `inotifyd` ignores the first mask letter, so `:nn` = create-only. A plain `:n` fails with `Invalid argument`, and the default mask would report every read of every input node (a flood on each touch frame).
+  3. A 60 s safety-net rescan in case an event is missed while `inotifyd` restarts.
+  4. `exec nice -n -8 iptsd /dev/hidrawN`: touch processing runs at Android's "urgent display" priority (same as `InputReader`), so CPU-heavy games can't delay touch frames.
 
 ### 2. Coordinate Transformation (180° Inversion)
 - Microsoft Surface digitizers are physically inverted.
