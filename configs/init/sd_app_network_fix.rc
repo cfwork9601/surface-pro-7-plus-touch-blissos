@@ -1,0 +1,12 @@
+# Re-allowlist apps on the adopted SD card for restricted networking mode.
+# See /system/etc/sd_app_network_fix.sh for details. Installed by install.sh.
+
+service sd_app_network_fix /system/bin/sh /system/etc/sd_app_network_fix.sh
+    user root
+    group root
+    oneshot
+    disabled
+    seclabel u:r:init:s0
+
+on property:sys.boot_completed=1
+    start sd_app_network_fix

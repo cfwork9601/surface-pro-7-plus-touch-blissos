@@ -20,6 +20,7 @@ Every change made to the Surface Pro 7+ (Bliss OS 16.9.7) and this repository, w
 | 8 | Touch | **Watchdog made event-driven** (`inotifyd`) | Repo + tablet |
 | 9 | Touch | **`iptsd` priority raised** to nice -8 | Repo + tablet |
 | 10 | Docs | `CLAUDE.md` rootfs note corrected, new invariant #6 | Repo |
+| 11 | Network | **Apps on SD card had no internet**: boot service re-allowlists them | Repo + tablet |
 
 ---
 
@@ -199,3 +200,25 @@ cleanup_raw_ithc
 - `docs/COMMANDS.md`: stay-awake via `settings`, battery percent, animations, CPU profiles, SD card app moves (§6).
 - `docs/ARCHITECTURE.md`: new watchdog and priority description.
 - `docs/CAMERA.md`: camera (IPU6) status, linked from `CLAUDE.md`.
+
+### 11. Apps on the SD card have no internet ("Failed to connect", `ReliableTimeFailed`)
+
+**Symptoms:** Fruit Ninja showed *Failed to connect to server... ReliableTimeFailed* while YouTube worked. In-app HTTPS failed in about 6 ms (`TRuntime.CctTransportBackend: Couldn't open connection`). Started after the app was moved to the SD card and the tablet rebooted.
+
+**Root cause:** Bliss (Lineage-based) has **restricted networking mode** on (`settings global restricted_networking_mode = 1`; it powers the per-app "Network access" switch). Only uids with `RESTRICTED_MATCH` in netd's BPF uid owner map can use the network. NetworkPolicyManager builds that allowlist at boot, **before the adopted SD card is mounted**, so every app on the card is skipped and never re-added. Checked: all 9 SD apps had no `RESTRICTED_MATCH`; every internal app (YouTube, Roblox, WhatsApp, Chrome) had it.
+
+| Apps on SD card | Old (after every boot) | New |
+|---|---|---|
+| Fruit Ninja, Honkai Impact 3rd, Prisma3D, Sketchbook, X-plore, Farm Heroes Saga, Facebook, FourPlayers, ibisPaint X | not allowlisted → no network | allowlisted ~30 s after boot |
+
+**Fix:** new boot service (installed by `install.sh`):
+- `configs/init/sd_app_network_fix.rc` → `/system/etc/init/`: oneshot service started on `sys.boot_completed=1`.
+- `configs/sd_app_network_fix.sh` → `/system/etc/`: waits for the adopted volume and its packages, checks each SD app's uid for `RESTRICTED_MATCH`, and **only if any is missing** toggles `restricted_networking_mode` 1 → 0 → 1 so the allowlist is rebuilt. Does nothing if restricted mode is off. Logs to logcat tag `sd_app_network_fix`.
+- Side effect: during the ~1 s toggle, apps you've blocked with "Network access" off are briefly not blocked. It happens only when SD apps are missing, i.e. once per boot.
+
+**Verified after reboot:** log `not allowlisted: ... -> rebuilding restricted-mode allowlist`, then all SD apps have `RESTRICTED_MATCH`, mode back at `1`, Fruit Ninja connects (confirmed by user).
+
+- Manual fix (same effect): `adb shell "settings put global restricted_networking_mode 0; sleep 1; settings put global restricted_networking_mode 1"`
+- Check: `adb shell logcat -d -s sd_app_network_fix`
+- Revert: `adb shell "mount -o remount,rw / && rm /system/etc/init/sd_app_network_fix.rc /system/etc/sd_app_network_fix.sh && sync"`
+- Script note: mksh treats an unquoted `|` in `${var%%pattern}` as alternation; it must be quoted (`${line%%"|"*}`).

@@ -60,6 +60,8 @@ Do not modify or propose changes that break these verified system invariants:
 6. **No root `app_process` Tools / cpuinfo Mount Fix**:
    - Never run `svc`, `monkey`, or `uiautomator` as root via adb unless `/system/etc/init/cpuinfo_mount_fix.rc` is installed. They leak `/proc/cpuinfo` bind mounts that double per call (65k mounts → system stalls). Use `settings`/`cmd`/`am start -n` instead.
    - Keep `cpuinfo_mount_fix.rc` installed. Health check: `grep -c cpuinfo /proc/1/mounts` should be `2`. See `docs/TROUBLESHOOTING.md` §6.
+7. **SD-Card Apps Network Allowlist**:
+   - Restricted networking mode (`restricted_networking_mode = 1`) skips apps on the adopted SD card at boot. Keep the `sd_app_network_fix` boot service installed (`/system/etc/init/sd_app_network_fix.rc` + `/system/etc/sd_app_network_fix.sh`). See `docs/TROUBLESHOOTING.md` §7.
 
 ---
 

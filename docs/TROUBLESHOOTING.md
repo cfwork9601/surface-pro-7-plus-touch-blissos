@@ -69,3 +69,11 @@
 - **Check**: `adb shell "grep -E ' /proc | /system/etc/cpuinfo' /proc/1/mountinfo"` must show no `shared:` tag on these lines, and `grep -c cpuinfo /proc/1/mounts` should stay at 2.
 - **Recovery if it recurs**: reboot (stacked mounts on `/proc/cpuinfo` cannot be unmounted while held open).
 
+---
+
+## 7. App on SD Card Says "No Internet" / "Failed to Connect" (Other Apps Work)
+- **Symptoms**: Apps moved to the adopted SD card can't connect after a reboot (e.g. Fruit Ninja `ReliableTimeFailed`); apps on internal storage work.
+- **Cause**: Restricted networking mode (`restricted_networking_mode = 1`) allowlist is built at boot before the SD card mounts, so SD apps are left out (no `RESTRICTED_MATCH` in the BPF uid owner map).
+- **Fix** (installed by `install.sh`): `sd_app_network_fix` boot service rebuilds the allowlist once the SD apps are available. Log: `adb shell logcat -d -s sd_app_network_fix`.
+- **Manual fix**: `adb shell "settings put global restricted_networking_mode 0; sleep 1; settings put global restricted_networking_mode 1"`
+- **Check an app**: get its uid with `adb shell pm list packages -U <pkg>`, then `adb shell "dumpsys connectivity trafficcontroller | grep -E '^ *<uid> '"` must show `RESTRICTED_MATCH`.

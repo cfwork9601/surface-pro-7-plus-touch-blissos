@@ -65,6 +65,11 @@ echo "==> Installing cpuinfo mount-leak fix (init rc)..."
 $ADB_CMD push "$CONFIG_DIR/init/cpuinfo_mount_fix.rc" /system/etc/init/cpuinfo_mount_fix.rc
 $ADB_CMD shell "chmod 644 /system/etc/init/cpuinfo_mount_fix.rc; chcon u:object_r:system_file:s0 /system/etc/init/cpuinfo_mount_fix.rc 2>/dev/null || true"
 
+echo "==> Installing SD-card app network fix (boot service)..."
+$ADB_CMD push "$CONFIG_DIR/sd_app_network_fix.sh" /system/etc/sd_app_network_fix.sh
+$ADB_CMD push "$CONFIG_DIR/init/sd_app_network_fix.rc" /system/etc/init/sd_app_network_fix.rc
+$ADB_CMD shell "chmod 755 /system/etc/sd_app_network_fix.sh; chmod 644 /system/etc/init/sd_app_network_fix.rc; chcon u:object_r:system_file:s0 /system/etc/sd_app_network_fix.sh /system/etc/init/sd_app_network_fix.rc 2>/dev/null || true"
+
 echo "==> Restarting touch services..."
 $ADB_CMD shell "stop iptsd_runner 2>/dev/null || true; killall iptsd 2>/dev/null || true; sleep 1; start iptsd_runner; sleep 1; sync"
 

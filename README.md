@@ -51,6 +51,10 @@ Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** 
    - Root `app_process` tools (`svc`, `monkey`, `uiautomator`) make the ARM native bridge bind-mount `cpuinfo.arm64.txt` over `/proc/cpuinfo`. Shared mount propagation doubled the mounts on every call (seen: 65,621 mounts). `connect.sh` triggered it via `svc power stayon true`.
    - **Fix**: `cpuinfo_mount_fix.rc` makes `/proc` and the cpuinfo source files private mounts at boot; `connect.sh` now uses `settings` instead of `svc`. Mount count stays at 2 after repeated tool calls.
 
+7. **Apps on the SD Card Have No Internet After Reboot**:
+   - Bliss's restricted networking mode builds its network allowlist at boot, before the adopted SD card mounts, so apps installed on the card get no network (e.g. Fruit Ninja `ReliableTimeFailed`).
+   - **Fix**: `sd_app_network_fix` boot service checks the SD apps after boot and rebuilds the allowlist only if any are missing.
+
 > Full before/after values for every change: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ---
@@ -64,8 +68,10 @@ Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** 
 ├── configs/
 │   ├── iptsd.conf              # Tuned IPTSD configuration
 │   ├── iptsd_runner            # Raw ITHC cleanup, event-driven watchdog, iptsd launcher (nice -8)
+│   ├── sd_app_network_fix.sh   # Re-allowlists SD-card apps for network after boot
 │   ├── init/
-│   │   └── cpuinfo_mount_fix.rc  # Boot fix for the cpuinfo mount explosion
+│   │   ├── cpuinfo_mount_fix.rc  # Boot fix for the cpuinfo mount explosion
+│   │   └── sd_app_network_fix.rc # Starts sd_app_network_fix.sh at boot_completed
 │   └── idc/
 │       ├── IPTSD_Virtual_Touchscreen_045E_0C1A.idc
 │       └── Vendor_045e_Product_0c1a.idc
@@ -103,7 +109,7 @@ chmod +x install.sh
 ```
 *(If only one device is connected to ADB, you can simply run `./install.sh`)*.
 
-`install.sh` remounts the (read-only) root filesystem as read-write, deploys the touch configs, runner and IDC files, installs `cpuinfo_mount_fix.rc` (active from the next reboot), restarts `iptsd` and syncs.
+`install.sh` remounts the (read-only) root filesystem as read-write, deploys the touch configs, runner and IDC files, installs `cpuinfo_mount_fix.rc` and the `sd_app_network_fix` boot service (both active from the next reboot), restarts `iptsd` and syncs.
 
 ### Helper Scripts
 ```bash
