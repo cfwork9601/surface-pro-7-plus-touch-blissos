@@ -59,3 +59,13 @@
   key 114   VOLUME_DOWN
   ```
   The ACPI device is `MSHW0040:00` handled by `soc_button_array`.
+
+---
+
+## 6. Tablet Sluggish / `df` Hangs / ADB Drops (cpuinfo Mount Explosion)
+- **Symptoms**: `df` or anything reading `/proc/*/mounts` spins at 100% kernel CPU; ANRs; adb goes `offline`. `grep -c cpuinfo /proc/1/mounts` returns thousands (seen: 65,536).
+- **Cause**: `app_process`-based tools run **as root from adb shell / init namespace** (`svc`, `monkey`, `uiautomator`) initialize the native bridge, which bind-mounts `/system/etc/cpuinfo.arm64.txt` over `/proc/cpuinfo`. The source lives on `/` (`shared:1`), so each new mount joins that peer group and propagates back onto the source path. The count goes 2n+1 per call. `connect.sh` used to call `svc power stayon true` on every connect.
+- **Fix** (installed by `install.sh`): `/system/etc/init/cpuinfo_mount_fix.rc` bind-mounts the cpuinfo source files onto themselves as `private` and makes `/proc` `private` at `post-fs-data`. Verified: 5x `svc` + `monkey` + `uiautomator` add 0 mounts; ARM apps still get their own private ARM cpuinfo.
+- **Check**: `adb shell "grep -E ' /proc | /system/etc/cpuinfo' /proc/1/mountinfo"` must show no `shared:` tag on these lines, and `grep -c cpuinfo /proc/1/mounts` should stay at 2.
+- **Recovery if it recurs**: reboot (stacked mounts on `/proc/cpuinfo` cannot be unmounted while held open).
+

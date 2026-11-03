@@ -44,7 +44,10 @@ sleep 1
 adb connect "$TARGET" >/dev/null 2>&1 || true
 
 echo "==> Preventing screen timeout during debugging..."
-adb -s "$TARGET" shell "svc power stayon true 2>/dev/null || true"
+# Same effect as 'svc power stayon true' (7 = AC|USB|wireless), but uses native
+# 'cmd settings'. Do NOT use svc/monkey/uiautomator as root here: app_process
+# tools leak /proc/cpuinfo bind mounts (see configs/init/cpuinfo_mount_fix.rc).
+adb -s "$TARGET" shell "settings put global stay_on_while_plugged_in 7 2>/dev/null || true"
 adb -s "$TARGET" shell "settings put system screen_off_timeout 1800000 2>/dev/null || true"
 
 echo "==> Connected successfully to $TARGET!"

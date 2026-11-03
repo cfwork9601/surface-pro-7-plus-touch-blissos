@@ -1,0 +1,20 @@
+# Prevent exponential /proc/cpuinfo bind-mount growth (native bridge leak).
+#
+# Problem: every app_process-based tool run as root from the default mount
+# namespace (svc, monkey, uiautomator, ...) loads libnativebridge, which
+# bind-mounts /system/etc/cpuinfo.arm64.txt over /proc/cpuinfo. Because the
+# source file lives on "/" (shared:1), each new mount joins that peer group and
+# propagates back onto the source path, so the mount count doubles per call
+# (3 -> 7 -> 15 -> ... -> 65k), stalling every reader of /proc/*/mounts.
+#
+# Fix: give the cpuinfo source files their own private mounts and make /proc
+# private, so each bind-mount stays a single, non-propagating entry.
+# Runs on post-fs-data (after init enters the default mount namespace,
+# before zygote starts). Installed to /system/etc/init/ by install.sh.
+
+on post-fs-data
+    mount none /system/etc/cpuinfo.arm64.txt /system/etc/cpuinfo.arm64.txt bind
+    mount none none /system/etc/cpuinfo.arm64.txt private
+    mount none /system/etc/cpuinfo.arm.txt /system/etc/cpuinfo.arm.txt bind
+    mount none none /system/etc/cpuinfo.arm.txt private
+    mount none none /proc private

@@ -29,6 +29,7 @@ Always execute commands through the repository scripts or target explicit ADB se
 ./scripts/restart_iptsd.sh    # Safely restart touch daemon and sync buffers
 ./scripts/screencap.sh        # Pull screenshot from tablet to host
 ./scripts/pull_backup.sh      # Backup current configs from device to backups/
+./scripts/cpu_profile.sh      # CPU profile: gaming | balance (default) | battery
 ./install.sh                  # Deploy full repository configs to device
 ```
 
@@ -54,8 +55,11 @@ Do not modify or propose changes that break these verified system invariants:
    - **`Neutral = mode` MUST remain active in `iptsd.conf`.**
    - NEVER set `Neutral = constant` or `NeutralValue = 0`. Without mode-based baseline subtraction, the daemon detects electrical floor noise across the entire glass, resulting in **0 touch contacts**.
 5. **Disk Commit**:
-   - The root filesystem is mounted `rw` on `/dev/loop0`.
+   - The root filesystem (`/dev/loop0`) boots **read-only**; `install.sh` remounts it `rw` before writing (`mount -o remount,rw /`).
    - **Always run `adb shell sync`** after writing files or restarting daemons to ensure persistence across reboots.
+6. **No root `app_process` Tools / cpuinfo Mount Fix**:
+   - Never run `svc`, `monkey`, or `uiautomator` as root via adb unless `/system/etc/init/cpuinfo_mount_fix.rc` is installed. They leak `/proc/cpuinfo` bind mounts that double per call (65k mounts → system stalls). Use `settings`/`cmd`/`am start -n` instead.
+   - Keep `cpuinfo_mount_fix.rc` installed. Health check: `grep -c cpuinfo /proc/1/mounts` should be `2`. See `docs/TROUBLESHOOTING.md` §6.
 
 ---
 
@@ -66,3 +70,4 @@ Consult these detailed references on demand:
 - **Full Hardware Specs (DMI / PCI / ACPI):** See [`docs/HARDWARE_SPECS.md`](docs/HARDWARE_SPECS.md)
 - **Troubleshooting & Diagnostic Trees:** See [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 - **Complete Command Cheatsheet:** See [`docs/COMMANDS.md`](docs/COMMANDS.md)
+- **Camera Status (IPU6, unsupported):** See [`docs/CAMERA.md`](docs/CAMERA.md)

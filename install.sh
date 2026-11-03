@@ -61,6 +61,10 @@ $ADB_CMD shell "cp /system/usr/idc/Vendor_045e_Product_0c1a.idc /data/system/dev
 $ADB_CMD shell "cp /system/usr/idc/IPTSD_Virtual_Touchscreen_045E_0C1A.idc /data/system/devices/idc/"
 $ADB_CMD shell "chmod 644 /system/usr/idc/Vendor_045e_Product_0c1a.idc /system/usr/idc/IPTSD_Virtual_Touchscreen_045E_0C1A.idc /data/system/devices/idc/*.idc"
 
+echo "==> Installing cpuinfo mount-leak fix (init rc)..."
+$ADB_CMD push "$CONFIG_DIR/init/cpuinfo_mount_fix.rc" /system/etc/init/cpuinfo_mount_fix.rc
+$ADB_CMD shell "chmod 644 /system/etc/init/cpuinfo_mount_fix.rc; chcon u:object_r:system_file:s0 /system/etc/init/cpuinfo_mount_fix.rc 2>/dev/null || true"
+
 echo "==> Restarting touch services..."
 $ADB_CMD shell "stop iptsd_runner 2>/dev/null || true; killall iptsd 2>/dev/null || true; sleep 1; start iptsd_runner; sleep 1; sync"
 
