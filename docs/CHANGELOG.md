@@ -21,6 +21,7 @@ Every change made to the Surface Pro 7+ (Bliss OS 16.9.7) and this repository, w
 | 9 | Touch | **`iptsd` priority raised** to nice -8 | Repo + tablet |
 | 10 | Docs | `CLAUDE.md` rootfs note corrected, new invariant #6 | Repo |
 | 11 | Network | **Apps on SD card had no internet**: boot service re-allowlists them | Repo + tablet |
+| 12 | Camera | USB webcam path verified; workarounds documented | Docs (+ `uvcvideo` loaded once, not persistent) |
 
 ---
 
@@ -222,3 +223,14 @@ cleanup_raw_ithc
 - Check: `adb shell logcat -d -s sd_app_network_fix`
 - Revert: `adb shell "mount -o remount,rw / && rm /system/etc/init/sd_app_network_fix.rc /system/etc/sd_app_network_fix.sh && sync"`
 - Script note: mksh treats an unquoted `|` in `${var%%pattern}` as alternation; it must be quoted (`${line%%"|"*}`).
+
+### 12. Camera workarounds
+
+- Built-in cameras (IPU6) remain unsupported on kernel 6.1. See `docs/CAMERA.md`.
+- Verified the USB webcam (UVC) path: `uvcvideo.ko` loads cleanly, the external camera HAL is running, and `android.hardware.camera.external` is declared.
+
+| | Old | New |
+|---|---|---|
+| `uvcvideo` module | not loaded | loaded manually with `modprobe uvcvideo` (until next reboot; autoloads on UVC plug-in) |
+| `docs/CAMERA.md` | status only | adds a Workarounds section: USB webcam, Android 14+ phone as USB webcam, app compatibility, verify commands |
+

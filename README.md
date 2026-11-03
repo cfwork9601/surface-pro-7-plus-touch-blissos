@@ -88,7 +88,7 @@ Tested and verified on **Microsoft Surface Pro 7+** running **Bliss OS 16.9.7** 
     ├── COMMANDS.md             # Command cheatsheet
     ├── HARDWARE_SPECS.md       # DMI / PCI / ACPI details
     ├── TROUBLESHOOTING.md      # Known problems & fixes
-    └── CAMERA.md               # Camera (IPU6) status: unsupported
+    └── CAMERA.md               # Camera: built-in (IPU6) unsupported; USB webcam workaround
 ```
 
 ---
