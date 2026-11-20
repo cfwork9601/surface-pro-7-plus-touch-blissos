@@ -70,6 +70,22 @@ $ADB_CMD push "$CONFIG_DIR/sd_app_network_fix.sh" /system/etc/sd_app_network_fix
 $ADB_CMD push "$CONFIG_DIR/init/sd_app_network_fix.rc" /system/etc/init/sd_app_network_fix.rc
 $ADB_CMD shell "chmod 755 /system/etc/sd_app_network_fix.sh; chmod 644 /system/etc/init/sd_app_network_fix.rc; chcon u:object_r:system_file:s0 /system/etc/sd_app_network_fix.sh /system/etc/init/sd_app_network_fix.rc 2>/dev/null || true"
 
+echo "==> Installing touchpad gestures (3-finger up = Recents, 4-finger up = Home)..."
+$ADB_CMD push "$CONFIG_DIR/touchpad_gestures.sh" /system/etc/touchpad_gestures.sh
+$ADB_CMD push "$CONFIG_DIR/init/touchpad_gestures.rc" /system/etc/init/touchpad_gestures.rc
+$ADB_CMD shell "chmod 755 /system/etc/touchpad_gestures.sh; chmod 644 /system/etc/init/touchpad_gestures.rc; chcon u:object_r:system_file:s0 /system/etc/touchpad_gestures.sh /system/etc/init/touchpad_gestures.rc 2>/dev/null || true"
+
+# Settings app (optional; build it with: cd gesture-app && ./gradlew assembleDebug)
+GESTURE_APK="$SCRIPT_DIR/gesture-app/app/build/outputs/apk/debug/app-debug.apk"
+if [ -f "$GESTURE_APK" ]; then
+    echo "==> Installing Touchpad Gestures settings app..."
+    $ADB_CMD install -r "$GESTURE_APK" >/dev/null
+    # Create the app's files dir (owned by the app) so the daemon can report status into it.
+    $ADB_CMD shell "run-as dev.surface.touchpadgestures mkdir -p files" || true
+else
+    echo "    (settings app not built; skipping. Gestures still work with defaults.)"
+fi
+
 echo "==> Restarting touch services..."
 $ADB_CMD shell "stop iptsd_runner 2>/dev/null || true; killall iptsd 2>/dev/null || true; sleep 1; start iptsd_runner; sleep 1; sync"
 

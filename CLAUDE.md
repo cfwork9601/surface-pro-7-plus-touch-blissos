@@ -30,6 +30,7 @@ Always execute commands through the repository scripts or target explicit ADB se
 ./scripts/screencap.sh        # Pull screenshot from tablet to host
 ./scripts/pull_backup.sh      # Backup current configs from device to backups/
 ./scripts/cpu_profile.sh      # CPU profile: gaming | balance (default) | battery
+./scripts/restart_gestures.sh # Restart touchpad gesture daemon (settings app: gesture-app/)
 ./install.sh                  # Deploy full repository configs to device
 ```
 

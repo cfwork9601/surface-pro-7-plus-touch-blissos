@@ -4,6 +4,29 @@ Every change made to the Surface Pro 7+ (Bliss OS 16.9.7) and this repository, w
 
 ---
 
+## 2026-11-20
+
+### 1. Multi-finger touchpad gestures (Type Cover) + settings app
+
+| | Old | New |
+|---|---|---|
+| 3-finger swipe up | Nothing (Android 13 has no touchpad gestures) | Recents (default) |
+| 4-finger swipe up | Nothing | Home (default) |
+| Other swipes (3/4 fingers, down/left/right) | Nothing | Configurable in the app (default: nothing) |
+
+- Why custom: Android 13's touchpad path is the old `TouchInputMapper` (POINTER mode). The gestures library / `TouchpadInputMapper` only arrived in Android 14 and is absent from `libinputreader.so`.
+- Daemon: `configs/touchpad_gestures.sh` → `/system/etc/touchpad_gestures.sh`, started by `configs/init/touchpad_gestures.rc` (on `sys.boot_completed=1`). Pipeline: `getevent` on the touchpad (passive, no grab) → `awk` prints `<fingers> <dx> <dy>` when all fingers lift after a swipe with 3 or more fingers → shell loop reads the config, picks the direction (it must cover the threshold distance and be mostly along one axis), and runs the action through `cmd input` / `cmd statusbar`. Both are native binder calls, not `app_process`, so invariant #6 still holds. Zero CPU when the touchpad is idle. Re-finds the touchpad when the Type Cover is detached or reattached.
+- Settings app: `gesture-app/` (Kotlin + Jetpack Compose + Material 3, package `dev.surface.touchpadgestures`). It has an on/off switch, an action for each 3/4-finger × up/down/left/right swipe, a swipe distance setting (5–25 mm, default 10), live "last gesture" status, and a Quick Settings tile to toggle gestures. It writes `/data/user/0/dev.surface.touchpadgestures/files/gestures.conf` (key=value). The daemon reads that file on every gesture using shell built-ins only, with no `eval`, and only accepts whitelisted keys and values. The daemon writes `files/status` back for the app to display.
+- Actions: home, back, recents, last_app (quick switch: two Recents presses, the same as a swipe along the bottom bar; handles split-screen and web apps), notifications, quick_settings, close_panels, screenshot (`KEYCODE_SYSRQ`), play_pause, next_track, prev_track.
+- Build: toolchain in `~/opt` on the iMac (`jdk17`, `android-sdk`, `gradle-8.9`; about 1 GB). `cd gesture-app && JAVA_HOME=~/opt/jdk17 ./gradlew assembleDebug`. `install.sh` installs the APK if it has been built.
+- Restart the daemon: `./scripts/restart_gestures.sh`. Logs: `adb shell logcat -s touchpad_gestures`.
+- Known limitation: Android still sees the fingers, so a swipe may also scroll the app under the pointer a little.
+- **Direction scaling (same day).** The touchpad is about 98 × 50 mm (ABS max 1956 × 997), so up/down swipes with 3–4 fingers only travel about 10–15 mm and were rejected when the distance setting was 17–20 mm (confirmed from the log). Vertical travel is now scaled by `PAD_W/PAD_H` before it is compared, so the setting applies as-is left/right and at about half up/down (the app shows both values). Rejected swipes are now logged with their measured dx/dy, and the app's status card shows them too.
+- **Fix (same day): gestures stopped after the Type Cover re-enumerated (sleep/resume, fold, reattach).** The kernel deletes and recreates the touchpad node, but `getevent` does not exit on a deleted node: it kept the stale fd and spun at **100% of one CPU core** reading nothing. The daemon now runs an `inotifyd /dev/input:nnd` watchdog (same pattern as `iptsd_runner`) that kills the reader (its PID is kept in `/dev/touchpad_gestures/getevent.pid`) when the node is deleted or a new touchpad node appears, and the main loop reopens the current node. Verified by deleting the node and re-adding it through ueventd (`echo add > /sys/class/input/event26/uevent`): the reader reopened it within seconds and used 0 CPU while idle.
+- Revert: `adb uninstall dev.surface.touchpadgestures; adb shell 'mount -o remount,rw /; rm /system/etc/init/touchpad_gestures.rc /system/etc/touchpad_gestures.sh; sync'`, then reboot.
+
+---
+
 ## 2026-11-02
 
 ### Summary
