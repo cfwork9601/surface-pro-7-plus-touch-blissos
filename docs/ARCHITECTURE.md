@@ -74,6 +74,13 @@ In `iptsd` C++ source:
 - `OrientationThresholdMax`: When rotating a thumb around a virtual joystick, angle deltas change rapidly. Must be `180` to prevent frame drops on 360° circular motions.
 - `SizeMax` (`8.0`) and `AspectMax` (`10.0`): Prevents flat-thumb joystick contact shapes from being classified as palms or invalid contacts.
 
+### 3b. Contact Detection Thresholds (fast-flick breaks)
+iptsd v3 detection per frame: subtract the neutral (mode) baseline → 3×3 Gaussian blur (σ 0.75) → a finger exists only where the **blurred peak > `ActivationThreshold`/255**. `DeactivationThreshold` only sets how far the blob grows from that peak; it never decides whether a finger is found.
+- `ActivationThreshold = 16`, `DeactivationThreshold = 13` (were 24 / 20).
+- Why: at 24, a fast-moving finger that lands **between sensor cells** (signal split over 4 cells) or **lightens at a flick reversal** blurs to ~22–23 and is not detected for 1–4 frames. `iptsd` emits a lift and a new touch, which ends drags and scrolls early.
+- Background noise is about ±2/255 raw (<1 after blur), so 16 has a wide margin. No ghost contacts on replay or live while charging.
+- Diagnose with a raw capture replayed offline (`iptsd-dump`, then **restart iptsd**: the dump tool leaves the digitizer in single-touch mode). See `docs/CHANGELOG.md` 2026-11-22 §4.
+
 ### 4. Capacitive Baseline Noise Subtraction
 - `Neutral = mode`: IPTsD computes the statistical mode of the heatmap (the background untouched glass) and subtracts it every 16 frames.
 - **CRITICAL**: Never set `Neutral = constant` with `0`. The background electrical noise will flood the detector and result in **0 touch contacts**.

@@ -1,0 +1,13 @@
+# Raise the Intel Xe GPU minimum clock so UI frames stay within the 60 Hz budget.
+#
+# Problem: the GPU idles at 100 MHz (gt_RPn) and ramps up too slowly when a
+# scroll or drag starts, so the first frames of every motion miss vsync.
+# Scripted Settings scroll test (12 swipe pairs, 2052x1368 render size):
+#   min 100 MHz: median 14-27 ms, p90 28-30 ms, p99 32 ms
+#   min 600 MHz: median 11 ms,    p90 12 ms,    p99 13 ms
+# The GPU still enters RC6 (power-gated) when idle; this only sets the floor
+# while it is rendering. Installed to /system/etc/init/ by install.sh.
+# Revert live: echo 100 > /sys/class/drm/card0/gt_min_freq_mhz
+
+on property:sys.boot_completed=1
+    write /sys/class/drm/card0/gt_min_freq_mhz 600
