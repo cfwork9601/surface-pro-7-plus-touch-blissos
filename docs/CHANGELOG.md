@@ -30,6 +30,20 @@ Touch input itself was healthy (100 Hz, no gaps on normal drags). The stutter ca
 - The `wm size`/`wm density` overrides persist by themselves (`settings global display_size_forced`).
 - Revert: `adb shell wm size reset; adb shell wm density reset`; `adb shell 'mount -o remount,rw /; rm /system/etc/init/gpu_min_freq.rc; echo 100 > /sys/class/drm/card0/gt_min_freq_mhz; sync'`.
 
+### 1b. Boot logo off-centre after the render-size change
+
+The boot animation starts (~7 s) at the full 2736x1824 before `system_server` applies the `wm size` override, so the logo shifted off-centre when the override kicked in.
+
+| | Old | New |
+|---|---|---|
+| `ro.surface_flinger.max_graphics_width` / `_height` (`/system/build.prop`) | unset | **2052 / 1368** |
+| `wm size` / `wm density` | 2052x1368 / 240 | 2052x1368 / 240 (unchanged; still needed so apps draw at 2052x1368) |
+
+- Fix confirmed on device: the logo stays centred for the whole boot.
+- `dumpsys display` still reports `real 2736 x 1824` (the panel); that is expected.
+- Original `build.prop` backed up to `backups/<timestamp>/system_build.prop` and `/data/local/tmp/build.prop.bak` on the tablet.
+- Revert: `adb shell 'mount -o remount,rw /; sed -i -e "/max_graphics_/d" -e "/Render at 2052x1368/d" /system/build.prop; sync'`, then reboot.
+
 ### 2. Background apps restricted, Google app removed (tablet only)
 
 | | Old | New |

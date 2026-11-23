@@ -70,6 +70,10 @@ $ADB_CMD push "$CONFIG_DIR/init/gpu_min_freq.rc" /system/etc/init/gpu_min_freq.r
 $ADB_CMD shell "chmod 644 /system/etc/init/gpu_min_freq.rc; chcon u:object_r:system_file:s0 /system/etc/init/gpu_min_freq.rc 2>/dev/null || true"
 $ADB_CMD shell "echo 600 > /sys/class/drm/card0/gt_min_freq_mhz" || true
 
+echo "==> Setting 2052x1368 render size (SurfaceFlinger cap + wm override, centred boot logo)..."
+$ADB_CMD shell "grep -q '^ro.surface_flinger.max_graphics_width=' /system/build.prop || printf '\n# Render at 2052x1368 from first frame (centred boot logo); see docs/CHANGELOG.md\nro.surface_flinger.max_graphics_width=2052\nro.surface_flinger.max_graphics_height=1368\n' >> /system/build.prop"
+$ADB_CMD shell "wm size 2052x1368; wm density 240" || true
+
 echo "==> Installing SD-card app network fix (boot service)..."
 $ADB_CMD push "$CONFIG_DIR/sd_app_network_fix.sh" /system/etc/sd_app_network_fix.sh
 $ADB_CMD push "$CONFIG_DIR/init/sd_app_network_fix.rc" /system/etc/init/sd_app_network_fix.rc
