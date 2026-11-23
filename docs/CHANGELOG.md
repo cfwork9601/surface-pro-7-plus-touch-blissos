@@ -4,6 +4,49 @@ Every change made to the Surface Pro 7+ (Bliss OS 16.9.7) and this repository, w
 
 ---
 
+## 2026-11-22
+
+### 1. UI smoothness: render resolution + GPU minimum clock
+
+Touch input itself was healthy (100 Hz, no gaps on normal drags). The stutter came from frames missing the 60 Hz deadline in every app, including plain Settings.
+
+| | Old | New |
+|---|---|---|
+| Render size (`wm size` / `wm density`) | 2736x1824 / 320 | **2052x1368 / 240** (same physical UI size, about 44% fewer pixels) |
+| GPU min clock (`/sys/class/drm/card0/gt_min_freq_mhz`) | 100 MHz | **600 MHz** (set at boot by `configs/init/gpu_min_freq.rc`) |
+| HWUI renderer | `skiagl` | `skiagl` (unchanged; Vulkan tested and rejected) |
+| CPU profile | `balance` | `balance` (unchanged; `gaming` tested, no gain) |
+
+- Measured with `dumpsys gfxinfo` on a scripted Settings scroll (`cmd input swipe`, 12 up/down pairs):
+
+  | Setup | Median | p90 | p99 |
+  |---|---|---|---|
+  | GPU min 100 MHz | 14–27 ms | 28–30 ms | 32 ms |
+  | **GPU min 600 MHz** | **11 ms** | **12 ms** | **13 ms** |
+  | GPU min 600 + CPU `gaming` | 14 ms | 15 ms | 17 ms |
+
+- Lower resolution in Termius (normal use): late frames 20% → 7.5%, p90 53 → 26 ms.
+- Vulkan (`setprop debug.hwui.renderer skiavk`) was much worse in Termius: median 17 ms, p90 85 ms, p99 400 ms. Do not enable.
+- The `wm size`/`wm density` overrides persist by themselves (`settings global display_size_forced`).
+- Revert: `adb shell wm size reset; adb shell wm density reset`; `adb shell 'mount -o remount,rw /; rm /system/etc/init/gpu_min_freq.rc; echo 100 > /sys/class/drm/card0/gt_min_freq_mhz; sync'`.
+
+### 2. Background apps restricted, Google app removed (tablet only)
+
+| | Old | New |
+|---|---|---|
+| Google app, Play Store, Facebook, Instagram, Roblox, YouTube, Brave, Chrome, Gmail, WhatsApp | Free to run in background | `RUN_ANY_IN_BACKGROUND ignore` (+ `restricted` standby bucket where Android allows it) |
+| Google app (`com.google.android.googlequicksearchbox`) | Installed, default assistant | Uninstalled for user 0; `assistant` setting cleared (voice recognition stays Claude) |
+
+- Why: those apps held 250–540 MB each and caused memory-compaction spikes (`kcompactd0` at 57% CPU) that dropped frames.
+- Gmail and WhatsApp no longer notify until opened.
+- Revert one app: `adb shell cmd appops set <pkg> RUN_ANY_IN_BACKGROUND allow; adb shell am set-standby-bucket <pkg> active`. Restore Google app: `adb shell cmd package install-existing com.google.android.googlequicksearchbox`.
+
+### 3. Warning: `iptsd-dump` kills touch on exit
+
+`iptsd-dump` (iptsd v3.x) switches the digitizer back to **single-touch mode** when it exits (`core/linux/runner.hpp`: `set_mode(Singletouch)`), so the running `iptsd` stops receiving heatmaps and touch goes dead. Always run `./scripts/restart_iptsd.sh` after a raw capture.
+
+---
+
 ## 2026-11-20
 
 ### 1. Multi-finger touchpad gestures (Type Cover) + settings app

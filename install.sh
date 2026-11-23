@@ -65,6 +65,11 @@ echo "==> Installing cpuinfo mount-leak fix (init rc)..."
 $ADB_CMD push "$CONFIG_DIR/init/cpuinfo_mount_fix.rc" /system/etc/init/cpuinfo_mount_fix.rc
 $ADB_CMD shell "chmod 644 /system/etc/init/cpuinfo_mount_fix.rc; chcon u:object_r:system_file:s0 /system/etc/init/cpuinfo_mount_fix.rc 2>/dev/null || true"
 
+echo "==> Installing GPU minimum clock (600 MHz) boot setting..."
+$ADB_CMD push "$CONFIG_DIR/init/gpu_min_freq.rc" /system/etc/init/gpu_min_freq.rc
+$ADB_CMD shell "chmod 644 /system/etc/init/gpu_min_freq.rc; chcon u:object_r:system_file:s0 /system/etc/init/gpu_min_freq.rc 2>/dev/null || true"
+$ADB_CMD shell "echo 600 > /sys/class/drm/card0/gt_min_freq_mhz" || true
+
 echo "==> Installing SD-card app network fix (boot service)..."
 $ADB_CMD push "$CONFIG_DIR/sd_app_network_fix.sh" /system/etc/sd_app_network_fix.sh
 $ADB_CMD push "$CONFIG_DIR/init/sd_app_network_fix.rc" /system/etc/init/sd_app_network_fix.rc
