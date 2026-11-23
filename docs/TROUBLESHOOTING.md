@@ -77,3 +77,20 @@
 - **Fix** (installed by `install.sh`): `sd_app_network_fix` boot service rebuilds the allowlist once the SD apps are available. Log: `adb shell logcat -d -s sd_app_network_fix`.
 - **Manual fix**: `adb shell "settings put global restricted_networking_mode 0; sleep 1; settings put global restricted_networking_mode 1"`
 - **Check an app**: get its uid with `adb shell pm list packages -U <pkg>`, then `adb shell "dumpsys connectivity trafficcontroller | grep -E '^ *<uid> '"` must show `RESTRICTED_MATCH`.
+- **Not every "Connection Error" is this.** If the uid already shows `RESTRICTED_MATCH` and `dumpsys netpolicy` shows `effective=NONE` for it, the network is not blocked. Example: Pixel Gun 3D (`com.pixel.gun3d`) reaches its CDN and Firebase, but its `auth_v2` login fails right after a Play Integrity token request. It fails the same way from internal storage (tested 2026-11-06), so the likely cause is Bliss OS failing Play Integrity, not the SD card.
+
+## 8. Touch Dead After Running an `iptsd-*` Tool (Controller Hung / Single-Touch Mode)
+- **Symptom**: touch stops right after running `iptsd-dump`, `iptsd-check-device`, `iptsd-calibrate` or similar while `iptsd` was running. `iptsd` may still be listed, or `./scripts/restart_iptsd.sh` shows no `iptsd` process and `getprop init.svc.iptsd_runner` says `restarting`.
+- **Cause**: these tools open the same hidraw node `iptsd` is streaming from.
+  - `iptsd-dump` (and anything built on the iptsd `Runner`) switches the digitizer back to **single-touch mode** when it exits, so `iptsd` stops receiving heatmaps.
+  - `iptsd-check-device` sends a feature-report request (`HIDIOCGFEATURE`). Sent while `iptsd` is streaming, it can time out (`IOCTL ... failed: Connection timed out`) and leave the ITHC controller **hung**. `iptsd_runner` runs the same check before starting `iptsd`, so the daemon never comes back.
+- **Diagnose**: `adb shell /vendor/bin/iptsd-check-device <node>` (only after `iptsd` is down). A timeout means the controller is hung.
+- **Fix**:
+  1. Single-touch mode only (check passes): `./scripts/restart_iptsd.sh`.
+  2. Controller hung (check times out): reset the ITHC driver, then restart `iptsd`:
+     ```bash
+     adb shell 'd=$(basename $(ls -d /sys/bus/pci/drivers/ithc/0000:*)); echo $d > /sys/bus/pci/drivers/ithc/unbind; sleep 2; echo $d > /sys/bus/pci/drivers/ithc/bind'
+     ./scripts/restart_iptsd.sh
+     ```
+     The ITHC raw input node reappears after the rebind; the `iptsd_runner` watchdog removes it automatically. A reboot also works.
+- **Prevention**: never run `iptsd-*` helper tools against the touch controller while `iptsd` is running. Find nodes with the read-only commands in `docs/COMMANDS.md` §2. For a raw capture, run `iptsd-dump`, then always `./scripts/restart_iptsd.sh`.

@@ -1,0 +1,11 @@
+# Multi-finger Type Cover touchpad gestures (3 up = Recents, 4 up = Home).
+# See /system/etc/touchpad_gestures.sh. Installed by install.sh.
+
+service touchpad_gestures /system/bin/sh /system/etc/touchpad_gestures.sh
+    user root
+    group root input
+    disabled
+    seclabel u:r:init:s0
+
+on property:sys.boot_completed=1
+    start touchpad_gestures
