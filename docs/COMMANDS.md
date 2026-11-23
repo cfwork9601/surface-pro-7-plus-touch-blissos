@@ -23,13 +23,18 @@ All commands assume connection via `adb -s 192.168.1.107:5555` (or `./scripts/co
 adb shell "ps -A | grep iptsd"
 
 # Test if device node is recognized by IPTSD
-adb shell "/vendor/bin/iptsd-check-device /dev/hidraw1"
+# (hidraw numbers change between boots, so find the touchscreen by its 045E:0C1A ID;
+#  iptsd-find-hidraw is broken on this build, and iptsd-check-device times out on the
+#  node iptsd already has open. iptsd_runner runs the check at startup anyway.)
+adb shell 'for h in /sys/class/hidraw/*; do case $(readlink $h/device) in *045E:0C1A*) echo /dev/${h##*/};; esac; done'
+adb shell 'ls -l /proc/$(pidof iptsd)/fd | grep hidraw'   # node iptsd is actually reading
 
 # Check EventHub input device bindings and active IDC file
 adb shell "dumpsys input | grep -B 2 -A 15 'IPTSD Virtual Touchscreen'"
 
 # Stream live touch events from device
-adb shell "getevent -l /dev/input/event14"
+# (the virtual touchscreen gets a new eventN on every iptsd restart, so look it up each time)
+adb shell 'getevent -lt $(getevent -pl 2>/dev/null | grep -B1 "IPTSD Virtual Touchscreen" | head -1 | grep -o "/dev/input/event[0-9]*")'
 
 # View active IPTSD configuration
 adb shell "cat /data/vendor/iptsd.conf"
