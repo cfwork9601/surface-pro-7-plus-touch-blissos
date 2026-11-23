@@ -77,3 +77,4 @@
 - **Fix** (installed by `install.sh`): `sd_app_network_fix` boot service rebuilds the allowlist once the SD apps are available. Log: `adb shell logcat -d -s sd_app_network_fix`.
 - **Manual fix**: `adb shell "settings put global restricted_networking_mode 0; sleep 1; settings put global restricted_networking_mode 1"`
 - **Check an app**: get its uid with `adb shell pm list packages -U <pkg>`, then `adb shell "dumpsys connectivity trafficcontroller | grep -E '^ *<uid> '"` must show `RESTRICTED_MATCH`.
+- **Not every "Connection Error" is this.** If the uid already shows `RESTRICTED_MATCH` and `dumpsys netpolicy` shows `effective=NONE` for it, the network is not blocked. Example: Pixel Gun 3D (`com.pixel.gun3d`) reaches its CDN and Firebase, but its `auth_v2` login fails right after a Play Integrity token request. It fails the same way from internal storage (tested 2026-11-06), so the likely cause is Bliss OS failing Play Integrity, not the SD card.
