@@ -52,6 +52,7 @@ Do not modify or propose changes that break these verified system invariants:
    - `PositionThresholdMax = 100.0`: Prevents fast flicks from dropping frames.
    - `OrientationThresholdMin = 0` / `OrientationThresholdMax = 180`: Prevents circular thumb rotation around virtual joysticks from setting `contact.stable = false` (which drops frames).
    - `SizeMax = 8.0` / `AspectMax = 10.0`: Prevents flattened thumbs from being invalidated by `Validator` and triggering premature touch releases (`lift_multitouch`).
+   - `ActivationThreshold = 16` / `DeactivationThreshold = 13`: At 24/20, fast flicks lost the finger for 1–4 frames (signal split between sensor cells or lightened at a reversal), which Android sees as a lift. Proven by an offline replay of a raw capture; see `docs/ARCHITECTURE.md` §3b.
 4. **Capacitive Baseline Calibration**:
    - **`Neutral = mode` MUST remain active in `iptsd.conf`.**
    - NEVER set `Neutral = constant` or `NeutralValue = 0`. Without mode-based baseline subtraction, the daemon detects electrical floor noise across the entire glass, resulting in **0 touch contacts**.

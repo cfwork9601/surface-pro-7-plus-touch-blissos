@@ -45,6 +45,22 @@ Touch input itself was healthy (100 Hz, no gaps on normal drags). The stutter ca
 
 `iptsd-dump` (iptsd v3.x) switches the digitizer back to **single-touch mode** when it exits (`core/linux/runner.hpp`: `set_mode(Singletouch)`), so the running `iptsd` stops receiving heatmaps and touch goes dead. Always run `./scripts/restart_iptsd.sh` after a raw capture.
 
+### 4. Touch detection threshold: fix breaks on fast flicks
+
+| | Old | New |
+|---|---|---|
+| `ActivationThreshold` (`/data/vendor/iptsd.conf`) | 24 | **16** |
+| `DeactivationThreshold` | 20 | **13** |
+
+- Symptom: during fast back-and-forth flicks, about one touch break per 10–20 s. Android saw a lift and a new touch 10–40 ms later, which ended drags and scrolls early.
+- Diagnosis: 22 s raw capture (`iptsd-dump`) replayed offline through iptsd **v3** (the version on the tablet), built in a Fedora container with a small replay tool that prints every frame's contacts and heatmap. The replay reproduced both live breaks exactly. No contact was marked unstable or invalid; the finger was missing at **detection**:
+  - Break 1 (1 frame): strong finger (peak 119 vs background 75) split across 4 sensor cells; blurred peak ≈ 22–23 < 24.
+  - Break 2 (4 frames): finger pressure lightened at the flick turnaround (peak 103–115) while nearly stationary.
+- Threshold sweep on the same recording (breaks / ghost contacts): 24 → 2 / 0, 20 → 1 / 0, **16 → 1 (1 frame) / 0**, 12 → 0 / 0. Picked 16 to keep margin for charger noise. Touches start/end about 1 frame (10 ms) later.
+- An earlier test lowering only `DeactivationThreshold` (20 → 16) did nothing, as expected: it does not affect whether a finger is detected.
+- Live check after the change, on the charger: 0 breaks, 0 ghost or very short touches, one finger slot used (short sample).
+- Revert: set both values back to 24 / 20 in `/data/vendor/iptsd.conf` (backup on the tablet: `/data/vendor/iptsd.conf.bak-act24`), then `./scripts/restart_iptsd.sh`.
+
 ---
 
 ## 2026-11-20
