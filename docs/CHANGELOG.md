@@ -6,6 +6,22 @@ Every change made to the Surface Pro 7+ (Bliss OS 16.9.7) and this repository, w
 
 ## 2026-11-22
 
+### 0. Boot switch buttons: Bliss → Windows and Windows → Bliss
+
+| | Old | New |
+|---|---|---|
+| Bliss → Windows | Reboot, pick Windows in GRUB | **"Boot to Windows" app + "Windows" Quick Settings tile** (`bootswitch-app/`, package `dev.surface.bootswitch`) runs `/system/etc/boot_to_windows.sh` as root (KernelSU `su`) |
+| Windows → Bliss | Restart (BlissOS is first in BootOrder) | **"Boot to Bliss" shortcut** (Desktop + Start menu), installed by `windows/Install-BootToBliss.ps1` |
+| UEFI BootOrder / GRUB default | `0005 BlissOS, 0004 Windows Boot Manager, …` / BlissOS | unchanged |
+
+- Both buttons are one-shot: Bliss sets UEFI `BootNext` to the "Windows Boot Manager" entry; Windows sets `{fwbootmgr} bootsequence` to the "BlissOS" entry. Entries are looked up by name, not number.
+- `efivarfs` is not mounted on Bliss by default; the script mounts it. A write must be one `write()` of the full 6 bytes (attributes `07 00 00 00` + entry number LE), so the script uses `dd`, not `printf` straight into the file (EINVAL).
+- The app needs root: KernelSU app → Superuser → enable "Boot to Windows". Without it the app shows an error and does nothing.
+- Windows setup (once, admin PowerShell): `powershell -ExecutionPolicy Bypass -File .\Install-BootToBliss.ps1`. It registers a "Boot to Bliss" scheduled task with highest privileges so clicks don't prompt for UAC.
+- Caveat: GRUB uses `savedefault`. If you ever pick Windows manually in the GRUB menu, GRUB's default becomes Windows, and "Boot to Bliss" will land in GRUB's 5 s countdown to Windows. Pick BlissOS once in GRUB to reset it.
+- Test without rebooting: `adb shell su -c "/system/etc/boot_to_windows.sh --no-reboot"` then `--clear`.
+- Revert: `adb uninstall dev.surface.bootswitch; adb shell 'mount -o remount,rw /; rm /system/etc/boot_to_windows.sh; sync'`; on Windows run the installer with `-Uninstall`.
+
 ### 1. UI smoothness: render resolution + GPU minimum clock
 
 Touch input itself was healthy (100 Hz, no gaps on normal drags). The stutter came from frames missing the 60 Hz deadline in every app, including plain Settings.

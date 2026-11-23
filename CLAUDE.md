@@ -31,6 +31,7 @@ Always execute commands through the repository scripts or target explicit ADB se
 ./scripts/pull_backup.sh      # Backup current configs from device to backups/
 ./scripts/cpu_profile.sh      # CPU profile: gaming | balance (default) | battery
 ./scripts/restart_gestures.sh # Restart touchpad gesture daemon (settings app: gesture-app/)
+adb shell su -c '/system/etc/boot_to_windows.sh' # Reboot once into Windows (app: bootswitch-app/, Windows side: windows/)
 ./install.sh                  # Deploy full repository configs to device
 ```
 

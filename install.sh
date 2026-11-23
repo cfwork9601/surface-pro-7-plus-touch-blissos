@@ -95,6 +95,19 @@ else
     echo "    (settings app not built; skipping. Gestures still work with defaults.)"
 fi
 
+echo "==> Installing Boot to Windows script..."
+$ADB_CMD push "$CONFIG_DIR/boot_to_windows.sh" /system/etc/boot_to_windows.sh
+$ADB_CMD shell "chmod 755 /system/etc/boot_to_windows.sh; chcon u:object_r:system_file:s0 /system/etc/boot_to_windows.sh 2>/dev/null || true"
+
+# Boot to Windows app (optional; build it with: cd bootswitch-app && JAVA_HOME=~/opt/jdk17 ./gradlew assembleDebug)
+BOOTSWITCH_APK="$SCRIPT_DIR/bootswitch-app/app/build/outputs/apk/debug/app-debug.apk"
+if [ -f "$BOOTSWITCH_APK" ]; then
+    echo "==> Installing Boot to Windows app (grant it root in KernelSU > Superuser)..."
+    $ADB_CMD install -r "$BOOTSWITCH_APK" >/dev/null
+else
+    echo "    (Boot to Windows app not built; skipping.)"
+fi
+
 echo "==> Restarting touch services..."
 $ADB_CMD shell "stop iptsd_runner 2>/dev/null || true; killall iptsd 2>/dev/null || true; sleep 1; start iptsd_runner; sleep 1; sync"
 
