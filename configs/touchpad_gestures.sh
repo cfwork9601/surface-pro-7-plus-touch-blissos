@@ -111,13 +111,23 @@ handle_gesture() {
         write_status "$fingers fingers: too short (dx $((dx / UNITS_PER_MM)) mm, dy $((dy / UNITS_PER_MM)) mm)" none
         return
     fi
+    # Rotation-aware: the touchpad turns with the tablet, so map pad
+    # directions to screen directions ("up" = towards the top of the screen).
+    # Rotation is read once per gesture (~25 ms), never while idle.
+    paddir=$dir
+    rot=$(dumpsys window displays 2>/dev/null | grep -m1 -o " mRotation=[0-3]")
+    case "${rot##*=}$dir" in
+        1up) dir=left ;;  1down) dir=right ;; 1left) dir=down ;;  1right) dir=up ;;
+        2up) dir=down ;;  2down) dir=up ;;    2left) dir=right ;; 2right) dir=left ;;
+        3up) dir=right ;; 3down) dir=left ;;  3left) dir=up ;;    3right) dir=down ;;
+    esac
     case "$fingers$dir" in
         3up) a=$g3_up ;; 3down) a=$g3_down ;; 3left) a=$g3_left ;; 3right) a=$g3_right ;;
         4up) a=$g4_up ;; 4down) a=$g4_down ;; 4left) a=$g4_left ;; 4right) a=$g4_right ;;
         *) return ;;
     esac
     if [ "$a" != none ] && run_action "$a"; then :; else a=none; fi
-    log -t touchpad_gestures "$fingers fingers $dir -> $a"
+    log -t touchpad_gestures "$fingers fingers $dir (pad: $paddir, rotation ${rot##*=}) -> $a"
     write_status "$fingers fingers $dir" "$a"
 }
 
